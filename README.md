@@ -10,7 +10,7 @@ The pipeline moves data from raw CSV files to an analytics-ready star schema:
 Raw CSV files -> OLTP database (asb_oltp.duckdb) -> OLAP staging -> dimensions and facts (asb_olap.duckdb)
 ```
 
-- **Ingestion** uses the course boilerplate (`src/01_ingest_csv.py` plus the SQL scripts in `src/sql/oltp/`), which loads every CSV into a DuckDB OLTP database.
+- **Ingestion** uses the course boilerplate (`src/01_ingest_csv.py` plus the SQL scripts in `src/sql/oltp/`), which loads every CSV into DuckDB. That raw load is kept untouched in a **`landing`** schema. The pipeline then builds the **typed OLTP tables** (`src/oltp_typed.py`) under the same `schema.table` names, with proper data types, **primary and foreign keys**, duplicate removal and a quarantine table for rejected rows.
 - **Transformation** is plain SQL (`src/sql/olap/`). It reads **only from the OLTP database**, never from the CSV files.
 - **Orchestration** is one Python script, `run_pipe.py`, which runs nine steps in dependency order and logs every step, row count and data-quality result to `etl.*` tables in `asb_olap.duckdb`.
 - **SCD Type 2** is implemented on `dim_customer` and demonstrated with two loads (a second input batch is processed through the pipeline, never edited by hand).
@@ -52,9 +52,9 @@ Outputs: `asb_oltp.duckdb`, `asb_olap.duckdb`, a log per run in `logs/`, and evi
 | --- | --- | --- |
 | 1 | Validate source files | Every CSV exists, is not empty, and has the columns the SQL scripts need |
 | 2 | Prepare OLTP database | Schemas and etl logging tables are created |
-| 3 | Ingest CSV into OLTP | Boilerplate script loads the tables. Row counts (file vs table) are logged |
-| 4 | Validate OLTP load | Row counts, primary keys, foreign keys, business rules |
-| 5 | Prepare OLAP and staging | Load 1 resets the SCD dimension. Staging tables are built inside `dim_customer.sql` |
+| 3 | Ingest CSV into OLTP | Boilerplate script loads the raw tables, which are kept in schema `landing`. Typed tables with primary and foreign keys are built from them (nulls cleaned, duplicate keys removed, bad rows quarantined). File and table row counts are logged |
+| 4 | Validate OLTP load | File rows = loaded rows + quarantined rows, primary keys, foreign keys, business rules |
+| 5 | Prepare OLAP and staging | Creates the `staging` schema. Load 1 resets the SCD dimension. Staging tables (`stg_customer`, `chg_customer`, `stg_order_line`, `stg_invoice_line`) are built by the dimension and fact scripts |
 | 6 | Load dimensions | `dim_date`, `dim_city`, `dim_employee`, `dim_stock_item`, `bridge_stock_item_group`, `dim_customer` (SCD2) |
 | 7 | Load facts | `fact_order`, `fact_sale` (only after all dimensions succeeded) |
 | 8 | Final data-quality checks | 41 checks (37 pass, 4 informational), including SCD and re-run checks |
@@ -67,9 +67,10 @@ Outputs: `asb_oltp.duckdb`, `asb_olap.duckdb`, a log per run in `logs/`, and evi
 ```mermaid
 flowchart LR
     A["Kaggle CSV files<br/>data/"] --> B["Ingestion<br/>src/01_ingest_csv.py<br/>+ src/sql/oltp/*.sql"]
-    B --> C[("OLTP database<br/>asb_oltp.duckdb")]
+    B --> L["Raw landing copy<br/>(schema landing, untouched)"]
+    L --> C[("Typed OLTP database<br/>primary and foreign keys<br/>asb_oltp.duckdb")]
     C --> D["Validate OLTP<br/>row counts, PK, FK, rules"]
-    D --> E["Load dimensions<br/>src/sql/olap/dim_*.sql<br/>(dim_customer = SCD2)"]
+    D --> E["OLAP staging + dimensions<br/>src/sql/olap/dim_*.sql<br/>(dim_customer = SCD2)"]
     E --> F["Load facts<br/>fact_order, fact_sale"]
     F --> G[("OLAP database<br/>asb_olap.duckdb")]
     G --> H["Final data-quality checks"]
@@ -82,7 +83,7 @@ flowchart LR
 
 ### 5.2 OLTP entity-relationship diagram (tables used by the OLAP layer)
 
-The boilerplate load creates the tables from the CSV files without declared constraints, so these relationships are **logical**. They are verified by the pipeline's primary-key and foreign-key checks in step 4.
+These are the typed OLTP tables built in step 3. Primary keys and foreign keys are **declared constraints**, except `Customers.BillToCustomerID` (a self-reference), which is declared logically and verified by the foreign-key check in step 4. The untouched raw copy of every table is in schema `landing`.
 
 ```mermaid
 erDiagram
@@ -253,7 +254,7 @@ erDiagram
 
 ## 6. Source-to-target mapping
 
-The boilerplate loads each `Schema.Table.csv` into `schema.table` (snake_case) in `asb_oltp.duckdb`.
+The boilerplate loads each `Schema.Table.csv` into `schema.table` (snake_case) in `asb_oltp.duckdb`. The tables used by the warehouse are then rebuilt as typed tables with the same names (see `src/sql/oltp_typed/typed_tables.sql`).
 
 | Target table | OLTP source tables | Notes |
 | --- | --- | --- |
@@ -283,7 +284,7 @@ The boilerplate loads each `Schema.Table.csv` into `schema.table` (snake_case) i
 - **Delivery city.** The fact `city_key` comes from the **delivery city of the customer version valid on the transaction date**, so a customer who moves is reported under the right city at the right time.
 - **Product categories** use a bridge table because an item can belong to several stock groups. Sales by category therefore add up to more than total sales (an item counts once per group).
 - **Load order.** All dimensions are loaded first. Facts are loaded only after every dimension succeeded.
-- **Cleaning.** Cleaning happens in SQL macros (`src/sql/macros.sql`): the text `NULL` and empty strings become nulls, dd/mm/yyyy dates and 7-digit timestamps are parsed, and decimal commas are converted. Bad values become NULL instead of failing the load.
+- **Cleaning.** Cleaning happens in SQL macros (`src/sql/macros.sql`), first when the typed OLTP tables are built and again defensively in the OLAP scripts: the text `NULL` and empty strings become nulls, dd/mm/yyyy dates and 7-digit timestamps are parsed, and decimal commas are converted. Values that cannot be converted become NULL and are counted in `etl.oltp_hardening_log` (`cast_failures`). The original values are preserved in schema `landing`.
 
 ## 9. SCD approach
 
@@ -312,7 +313,7 @@ The boilerplate loads each `Schema.Table.csv` into `schema.table` (snake_case) i
 
 All results are stored in `etl.dq_results` and exported to `evidence/<run_id>/dq_results.csv`.
 
-- **OLTP (step 4):** source file rows equal table rows; primary keys not null and unique; foreign keys valid (including customer to bill-to customer); positive quantities, non-negative prices, valid and sensibly ordered dates, `ExtendedPrice = Quantity x UnitPrice + TaxAmount`.
+- **OLTP (step 3 and 4):** duplicate keys removed and orphan or null-key rows quarantined while building the typed tables; source file rows equal loaded rows plus quarantined rows; primary keys not null and unique; foreign keys valid (including customer to bill-to customer); positive quantities, non-negative prices, valid and sensibly ordered dates, `ExtendedPrice = Quantity x UnitPrice + TaxAmount`.
 - **OLAP (step 8):** surrogate and business keys unique; **one current SCD row per customer; no overlapping or gapped date ranges; end date not before start date**; every fact row's customer version is valid on its transaction date; fact row counts and totals (sales, profit, quantity) equal OLTP; fact grain unique; required keys resolve; **re-running the same load gives identical row counts**.
 - **Behavior chosen:** a failed **critical** check stops the pipeline with a clear message, marks the step and run as FAILED in the `etl` tables, and the later steps do not run. **Warnings** (business-rule violations) are recorded and reported but do not stop the run, so the offending rows stay visible for investigation. Rows are not deleted or quarantined, because the OLTP data is kept as received and unmatched dimension values are mapped to the Unknown member instead.
 
@@ -337,7 +338,7 @@ The 10 business questions are answered by `src/sql/queries/` (16 files, because 
 
 Stored in the repository under `evidence/` and `logs/`:
 
-- **CSV to OLTP ingestion and row counts:** `ingestion_log.csv` (file rows vs table rows per table) in each run folder
+- **CSV to OLTP ingestion and row counts:** `ingestion_log.csv` (file rows vs table rows per table), `oltp_hardening_log.csv` (rows landed, loaded and rejected, conversion failures) and `quarantine.csv` in each run folder
 - **OLTP to OLAP transformation and row counts:** `table_counts.csv`
 - **Data-quality results:** `dq_results.csv`
 - **SCD Type 2 across two loads:** the load 1 and load 2 run folders, plus `q09` and `q10` query results
@@ -346,7 +347,7 @@ Stored in the repository under `evidence/` and `logs/`:
 
 ## 13. Known assumptions and limitations
 
-- **OLTP layer is the course boilerplate.** Tables are created from the CSV files with types inferred by DuckDB and **no declared primary or foreign keys**. Keys, relationships and data types are enforced through the pipeline's validation checks and the SQL cleaning macros instead.
+- **OLTP layer.** The course boilerplate loads the CSV files with types inferred by DuckDB and no constraints. This pipeline keeps that raw load in schema `landing` and rebuilds typed tables with primary and foreign keys. `Customers.BillToCustomerID` (a self-reference) is checked but not declared as a constraint. Only the tables the warehouse needs (19) are typed. The other boilerplate tables (for example purchase orders and temperature readings) stay as loaded.
 - **Source quirks.** `IsUndersupplyBackordered` is `1` for every order in this dataset, so it cannot identify backorders. A **backordered line** is defined as picked quantity below ordered quantity (3,147 lines in 3,085 orders). Those lines are never invoiced. Brand, color and size are missing for most stock items and show as `N/A`. People has only name fields, so `dim_employee` is small.
 - **Invoiced quantity** is matched through order and stock item, which is unique in this dataset.
 - **SCD dates are simulated.** The CSV files are a single snapshot, so the change date for load 2 is a parameter (default `2016-01-01`). The first version of each customer starts at `1900-01-01`.
@@ -367,7 +368,7 @@ Normalized lookup tables were joined into descriptive dimensions: cities, state 
 `dim_customer` uses Type 2 for customer category, buying group and delivery city, because these define how revenue is grouped and a customer's past sales must stay attached to the values that were true at the time. All other customer attributes (name, contact, credit limit, phone, address and similar) use Type 1, because they are corrections or minor updates where history adds no analytic value. `dim_city`, `dim_employee` and `dim_stock_item` are Type 1 reference data and are rebuilt on each run. Section 9 shows the two-load demonstration.
 
 **4. How does your pipeline prevent duplicates and produce consistent results when the same input is processed more than once?**
-The OLTP tables are fully replaced on each ingestion (`CREATE OR REPLACE TABLE`). Type 1 dimensions and both facts are rebuilt from OLTP with `CREATE OR REPLACE TABLE`, and surrogate keys come from `ROW_NUMBER()` ordered by the business key, so identical input gives identical output with no appended duplicates. The Type 2 dimension is incremental, but it only inserts a new version when the hash of the tracked attributes differs from the current version (or the customer is new), so reprocessing the same batch changes nothing. The pipeline proves this: each run compares its table row counts with the previous successful run of the same load, and the check `rerun_row_counts_stable` must show zero differences. Further checks require one current row per customer and no overlapping date ranges.
+The raw landing tables are replaced on each ingestion and the typed OLTP tables are rebuilt from them, with duplicate primary keys removed (first row kept) and rejected rows written to a quarantine table. Type 1 dimensions and both facts are rebuilt from OLTP with `CREATE OR REPLACE TABLE`, and surrogate keys come from `ROW_NUMBER()` ordered by the business key, so identical input gives identical output with no appended duplicates. The Type 2 dimension is incremental, but it only inserts a new version when the hash of the tracked attributes differs from the current version (or the customer is new), so reprocessing the same batch changes nothing. The pipeline proves this: each run compares its table row counts with the previous successful run of the same load, and the check `rerun_row_counts_stable` must show zero differences. Further checks require one current row per customer and no overlapping date ranges.
 
 **5. What would you change if the source produced millions of records per day and the business required hourly warehouse updates?**
 I would replace full rebuilds with **incremental loads**. The source would deliver only new and changed rows (CDC or a high-water mark on a modified timestamp), landed in append-only, partitioned raw tables with a batch ID, and facts would be merged by their business key so retries stay idempotent. Dimension lookups would use the current and historical SCD versions only for the new rows. The SCD2 logic would stay hash-based but run on the changed customers only. I would run the pipeline on a scheduler with retries, alerting and backfill support (Airflow or Dagster), run the data-quality checks per batch with metrics and failure thresholds, and handle late-arriving facts and dimensions with an inferred-member pattern. At that volume I would also move from a single-file embedded database to a scalable warehouse or lakehouse (for example PostgreSQL with partitioning and indexes at the smaller end, or a columnar cloud warehouse such as Snowflake or BigQuery, or Parquet tables with a query engine), partition fact tables by date, and add monitoring of load latency and freshness.
