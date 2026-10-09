@@ -1,3 +1,28 @@
 env/*
 data/*
 *.duckdb__pycache__/
+# Python
+__pycache__/
+*.pyc
+.venv/
+env/
+
+# Databases (rebuilt by the pipeline)
+*.duckdb
+*.duckdb.wal
+
+# Run outputs (regenerated every run); keep only the latest successful run
+logs/
+evidence/*
+!evidence/run_20261009T134238_ac09f3/
+
+# Experiments
+src/oltp_typed.py
+src/oltp_typed_experiment.py
+src/sql/oltp_typed/
+experiment_changes.patch
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db

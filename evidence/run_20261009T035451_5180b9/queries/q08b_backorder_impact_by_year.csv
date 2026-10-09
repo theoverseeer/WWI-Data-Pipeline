@@ -1,6 +1,0 @@
-fiscal_year,orders,orders_with_backorders,backordered_lines,backordered_quantity,unfulfilled_value_excluding_tax,pct_of_ordered_value
-FY2013,16333,346,350,38070,655471.20,1.66
-FY2014,20774,722,732,84732,1357822.20,2.7
-FY2015,23086,1113,1137,137134,1908421.40,3.43
-FY2016,13402,904,928,100340,1451220.40,4.5
-All years,73595,3085,3147,360276,5372935.20,3.02
