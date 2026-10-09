@@ -1,0 +1,8 @@
+run_id,load_no,table_name,row_count
+run_20261009T155304_270d9d,2,dim_date,6941
+run_20261009T155304_270d9d,2,dim_city,37941
+run_20261009T155304_270d9d,2,dim_employee,20
+run_20261009T155304_270d9d,2,dim_stock_item,228
+run_20261009T155304_270d9d,2,dim_customer,676
+run_20261009T155304_270d9d,2,fact_order,231412
+run_20261009T155304_270d9d,2,fact_sale,228265

@@ -1,28 +1,21 @@
-env/*
-data/*
-*.duckdb__pycache__/
-# Python
-__pycache__/
-*.pyc
-.venv/
+@"
+# Virtual environment
 env/
+.venv/
+
+# Raw data (download from Kaggle, see README) and the generated second batch
+data/*
 
 # Databases (rebuilt by the pipeline)
 *.duckdb
 *.duckdb.wal
 
-# Run outputs (regenerated every run); keep only the latest successful run
-logs/
-evidence/*
-!evidence/run_20261009T134238_ac09f3/
-
-# Experiments
-src/oltp_typed.py
-src/oltp_typed_experiment.py
-src/sql/oltp_typed/
-experiment_changes.patch
+# Python
+__pycache__/
+*.pyc
 
 # Editor / OS
 .vscode/
 .DS_Store
 Thumbs.db
+"@ | Set-Content -Encoding ascii .gitignore
