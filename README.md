@@ -1,6 +1,6 @@
 # Wide World Importers: End-to-End Data Engineering Pipeline
 
-**Author:** Brent Nicole C. Cardano | **Course:** IT2222 | **Stack:** Python 3.11+, DuckDB 1.5.6, plain SQL
+**Author:** Brent Nicole C. Cardano | **Stack:** Python 3.11+, DuckDB 1.5.6, plain SQL
 
 ## 1. Solution overview
 
