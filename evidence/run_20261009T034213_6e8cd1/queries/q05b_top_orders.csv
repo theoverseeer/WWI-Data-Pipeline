@@ -1,0 +1,21 @@
+order_id,order_date,salesperson,customer_name,ordered_quantity,order_value_including_tax
+30269,2014-07-07,Amy Trefl,Cong Hoa,167,36829.90
+66991,2016-02-20,Archer Lamble,"Tailspin Toys (Good Hart, MI)",468,33966.40
+49943,2015-05-28,Jack Potter,"Wingtip Toys (Nichols Hills, OK)",267,32991.89
+47596,2015-04-22,Jack Potter,"Wingtip Toys (Knights Landing, CA)",344,31786.00
+69920,2016-04-07,Hudson Onslow,Raj Verma,116,31489.30
+72045,2016-05-07,Archer Lamble,"Wingtip Toys (Leathersville, GA)",102,31470.90
+40366,2014-12-27,Jack Potter,"Tailspin Toys (Medicine Lodge, KS)",422,31401.90
+61568,2015-11-23,Lily Code,"Wingtip Toys (Dunkerton, IA)",133,31235.15
+17103,2013-11-18,Hudson Hollinworth,"Tailspin Toys (New Lexington, OH)",205,30805.05
+17181,2013-11-18,Taj Shand,"Wingtip Toys (Taft Heights, CA)",107,30641.75
+38260,2014-11-20,Hudson Onslow,Gabriela Hernandes,157,29776.95
+37820,2014-11-12,Lily Code,Philip Walker,219,29423.90
+32293,2014-08-08,Archer Lamble,"Wingtip Toys (Plata, TX)",301,29310.05
+45279,2015-03-19,Amy Trefl,"Tailspin Toys (Arbor Vitae, WI)",192,28916.75
+51078,2015-06-12,Kayla Woodcock,Som Mukherjee,341,28626.38
+16439,2013-11-04,Sophia Hinton,Daevasree Samavedam,309,28494.47
+48640,2015-05-07,Anthony Grosse,"Wingtip Toys (Cadogan, PA)",394,28461.93
+73521,2016-05-31,Amy Trefl,"Wingtip Toys (Birds, IL)",234,28280.80
+12044,2013-08-10,Taj Shand,"Tailspin Toys (Tolna, ND)",243,27662.79
+9039,2013-06-20,Hudson Hollinworth,"Wingtip Toys (Montoya, NM)",79,27624.15

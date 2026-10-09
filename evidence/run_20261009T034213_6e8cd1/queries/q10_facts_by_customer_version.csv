@@ -1,0 +1,1 @@
+customer_id,customer_name,customer_category_name,buying_group_name,delivery_city_name,effective_start_date,effective_end_date,invoices,first_invoice_date,last_invoice_date,sales_including_tax,all_invoices_inside_version_range
